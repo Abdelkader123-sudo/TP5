@@ -1,0 +1,30 @@
+Partie 1 : Vérifiez votre compréhension
+Pourquoi le hot reload ne change-t-il jamais le widget ? Le hot reload ne recharge que le code Dart. Le widget est écrit en Kotlin (Glance) et en XML, et il est affiché par le launcher. Il faut donc arrêter l’app et relancer flutter run pour recompiler le code natif.
+Différence entre androidx.compose.material3.Text et androidx.glance.text.Text ? Le premier est un composant Compose dessiné par notre application. Le second ne dessine rien lui-même : il décrit l’interface, que Glance traduit en RemoteViews et que le launcher dessine.
+Qui exécute le code de dessin du widget ? C’est le launcher, dans son propre processus. Notre application lui envoie seulement la description (RemoteViews).
+Questions des étapes
+Étape 1 : retirer la ligne <receiver> du Manifest. Le système ne connaît plus le widget, qui disparaît de la liste des widgets. On ne peut donc plus le poser.
+Étape 2 : supprimer tous les widgets, envoyer, puis reposer un widget. Le widget reposé affiche « Capteur », « — » et « en attente ». La valeur est perdue parce que l’état est stocké par widget posé. Sans widget, aucun état n’existe pour recevoir la valeur (message « Envoyé à 0 widget(s) »). Un nouveau widget démarre avec un état vide.
+Étape 3 : quel processus exécute RafraichirAction ? C’est le processus de notre application (com.example.tp5_widget), pas celui du launcher. Le launcher déclenche l’action et le système démarre notre processus si besoin. On le vérifie dans Logcat en ajoutant un Log.d dans onAction. La ligne s’affiche avec le PID et le package de notre app, différents de ceux du launcher.
+Étape 4 : pourquoi ne pas mettre à jour le widget toutes les 5 s ?
+WorkManager impose un minimum de 15 min pour un travail périodique, donc ce n’est pas réalisable.
+Des mises à jour aussi fréquentes consomment beaucoup de batterie et de données (réveils, réseau, redessin du widget), pour un gain inutile : l’utilisateur ne regarde pas son écran d’accueil toutes les 5 s.
+Questions de compréhension
+Pourquoi une interface Flutter ne peut-elle pas s’afficher dans un widget ? Flutter dessine chaque pixel avec son propre moteur, dans une surface qui lui appartient. Un widget d’écran d’accueil est dessiné par le launcher à partir de RemoteViews, et Flutter ne sait pas en produire. L’interface du widget doit donc être écrite en natif (XML ou Glance).
+Deux différences entre Compose et Glance.
+Compose est dessiné par l’application, Glance par le launcher.
+Compose se met à jour automatiquement quand l’état change, Glance seulement sur demande (update() / updateAll()).
+Les composants et modificateurs sont différents : androidx.glance... et GlanceModifier au lieu de Modifier.
+Le clic passe par une action (actionStartActivity, actionRunCallback) et non par onClick.
+Où est stockée la valeur ? Pourquoi un état par widget ? Elle est stockée dans un état DataStore Preferences (paires clé → valeur), géré par Glance, avec un fichier par widget posé. Chaque widget a son propre état car chaque instance est indépendante (taille, contenu) et un widget n’a pas de ViewModel. Il faut donc boucler sur tous les widgets pour les mettre à jour.
+Pourquoi une coroutine pour updateAppWidgetState et updateAll ? Ce sont des fonctions suspend qui lisent et écrivent un fichier (entrées/sorties). Elles ne doivent pas bloquer le thread principal et ne peuvent être appelées que depuis une coroutine.
+Pourquoi planifier le worker dans onEnabled() ? Cette méthode est appelée quand le premier widget est posé. Le travail ne tourne donc que si l’utilisateur a un widget, et il fonctionne même si l’app n’est jamais rouverte. Avec onDisabled(), on l’annule quand le dernier widget est retiré, donc aucune tâche inutile.
+Pourquoi updatePeriodMillis = 0 ? Cela désactive la mise à jour automatique du système, qui a un minimum de 30 min et qui est peu fiable. La mise à jour périodique est confiée à WorkManager (étape 4).
+
+
+Exercice 4 : Fiche projet (Abdelkader Jaziri ,Adem Mlik ,Yassine Abbassi, Salah Matmati)
+Quelle mesure le widget affiche-t-il ? (nom, unité) :	Le nombre d’animaux du troupeau, sans unité (« animaux »).
+Quel seuil déclenche l’alerte rouge ? :	La sortie de zone : l’alerte se déclenche dès qu’un animal quitte la zone de pâturage. Le widget passe au rouge avec « ALERTE ».
+Qui met à jour le widget : l’app Flutter, le worker, ou les deux ?	 :Les deux. L’app Flutter l’envoie à chaque nouvelle valeur reçue de Firebase (exercice 2). Le worker WorkManager le met à jour toutes les 15 min environ, même app fermée (exercice 3).
+Que doit faire un clic sur le widget ? ↻ ?	Clic sur le widget : ouvre l’application sur la liste des alertes. Bouton ↻ : relit le nombre d’animaux et vérifie la zone de pâturage, sans ouvrir l’app.
+Que voit l’utilisateur si Firebase ne répond pas ? : Le widget affiche « — » avec la mention « hors ligne », au lieu d’une valeur périmée.
